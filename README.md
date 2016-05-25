@@ -1,4 +1,4 @@
-# hdo-valglister
+# valglister
 
 Index norwegian election candidates in Elasticsearch.
 
