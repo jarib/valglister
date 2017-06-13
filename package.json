@@ -4,7 +4,7 @@
   "description": "Kilde:",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "reindex": "node index.js"
   },
   "author": "jari@holderdeord.no",
   "license": "MIT",
@@ -13,6 +13,7 @@
     "csv": "^1.1.0",
     "elasticsearch": "^11.0.1",
     "elasticsearch-streams": "0.0.9",
-    "glob": "^7.0.3"
+    "glob": "^7.0.3",
+    "moment": "^2.18.1"
   }
 }

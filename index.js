@@ -7,6 +7,7 @@ const es = require('elasticsearch');
 const ess = require('elasticsearch-streams');
 const AgentKeepAlive = require('agentkeepalive');
 const transform = require('stream-transform')
+const moment = require('moment');
 
 const client = new es.Client({
   host: process.env.ELASTICSEARCH_URL || 'localhost:9200',
@@ -153,6 +154,10 @@ function setupIndex(callback) {
                                     type: 'integer'
                                 },
 
+                                dateBorn: {
+                                    type: 'date'
+                                },
+
                                 gender: {
                                     type: 'string',
                                     index: 'not_analyzed'
@@ -255,6 +260,23 @@ function createTransform(file) {
                 gender: genders[row.Kjønn]
 
             });
+        case 'eksport_kandidater_2017_stortingsvalg':
+            return (row) => {
+                const dateBorn = moment(row.Fødselsdato, 'DD.MM.YYYY')
+
+                return ({
+                    year: 2017,
+                    election: 'storting',
+                    countyName: row.Fylke,
+                    partyId: row.Partikode,
+                    partyName: row.Parti,
+                    candidateId: row.Kandidatnr,
+                    name: clean(row.Navn),
+                    yearBorn: +dateBorn.format('YYYY'),
+                    dateBorn: dateBorn.format('YYYY-MM-DD'),
+                    gender: genders[row.Kjønn]
+                });
+            }
         default:
             throw new Error(`don't know how to transform ${file}`);
     }
