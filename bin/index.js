@@ -17,7 +17,7 @@ const client = new es.Client({
     },
 });
 
-setupIndex(err => {
+setupIndex((err) => {
     if (err) {
         throw err;
     }
@@ -39,7 +39,7 @@ setupIndex(err => {
                 );
             });
 
-            const toBulk = new ess.TransformToBulk(doc => ({}));
+            const toBulk = new ess.TransformToBulk((doc) => ({}));
 
             const parser = csv.parse({
                 columns: true,
@@ -188,7 +188,7 @@ function clean(str) {
 function createTransform(file) {
     switch (path.basename(file, '.csv')) {
         case 'eksport_kandidater_2011_fylkestingsvalg':
-            return row => ({
+            return (row) => ({
                 year: 2011,
                 election: 'fylkesting',
                 countyId: row.KOMMNR,
@@ -201,7 +201,7 @@ function createTransform(file) {
                 gender: genders[row.KJØNN],
             });
         case 'eksport_kandidater_2011_kommunestyrevalg':
-            return row => ({
+            return (row) => ({
                 year: 2011,
                 election: 'kommunestyre',
                 municipalityId: row.KOMMNR,
@@ -214,7 +214,7 @@ function createTransform(file) {
                 gender: genders[row.KJØNN],
             });
         case 'eksport_kandidater_2013_stortingsvalg':
-            return row => ({
+            return (row) => ({
                 year: 2013,
                 election: 'storting',
                 countyId: row.county_number,
@@ -227,7 +227,7 @@ function createTransform(file) {
                 gender: genders[row.candidate_gender],
             });
         case 'eksport_kandidater_2015_bydelsutvalg_oslo':
-            return row => ({
+            return (row) => ({
                 year: 2015,
                 election: 'bydelsutvalg',
                 countyId: '0300',
@@ -241,7 +241,7 @@ function createTransform(file) {
                 gender: genders[row.Kjønn],
             });
         case 'eksport_kandidater_2015_fylkestingsvalg':
-            return row => ({
+            return (row) => ({
                 year: 2015,
                 election: 'fylkesting',
                 countyName: row.Fylke,
@@ -253,7 +253,7 @@ function createTransform(file) {
                 gender: genders[row.Kjønn],
             });
         case 'eksport_kandidater_2015_kommunestyrevalg':
-            return row => ({
+            return (row) => ({
                 year: 2015,
                 election: 'kommunestyre',
                 countyName: row.Fylke,
@@ -267,7 +267,7 @@ function createTransform(file) {
                 gender: genders[row.Kjønn],
             });
         case 'eksport_kandidater_2017_stortingsvalg':
-            return row => {
+            return (row) => {
                 const dateBorn = moment(row.Fødselsdato, 'DD.MM.YYYY');
 
                 return {
@@ -281,6 +281,53 @@ function createTransform(file) {
                     yearBorn: +dateBorn.format('YYYY'),
                     dateBorn: dateBorn.format('YYYY-MM-DD'),
                     gender: genders[row.Kjønn],
+                };
+            };
+        case 'eksport_kandidater2019_fylkestingsvalg':
+            return (row) => {
+                return {
+                    year: 2019,
+                    election: 'fylkesting',
+                    countyName: row.fylke,
+                    partyId: row.partikode,
+                    partyName: row.partinavn,
+                    candidateId: row.kandidatnr,
+                    name: clean(row.navn),
+                    yearBorn: row.fødselsår,
+                    gender: genders[row.kjønn],
+                };
+            };
+        case 'eksport_kandidater2019_kommunestyrevalg':
+            return (row) => {
+                return {
+                    year: 2019,
+                    election: 'kommunestyre',
+                    municipalityId: row.kommunenr,
+                    municipalityName: row.kommune,
+                    countyName: row.fylke,
+                    partyId: row.partikode,
+                    partyName: row.partinavn,
+                    candidateId: row.kandidatnr,
+                    name: clean(row.navn),
+                    yearBorn: row.fødselsår,
+                    gender: genders[row.kjønn],
+                    cityDistrict: row.bosted,
+                };
+            };
+        case 'eksport_kandidater2019_valg_bydelsutvalg_oslo':
+            return (row) => {
+                return {
+                    year: 2019,
+                    election: 'bydelsutvalg',
+                    municipalityId: '0301',
+                    municipalityName: 'Oslo',
+                    cityDistrict: row.bydel,
+                    partyId: row.partikode,
+                    partyName: row.partinavn,
+                    candidateId: row.kandidatnr,
+                    name: clean(row.navn),
+                    yearBorn: row.fødselsår,
+                    gender: genders[row.kjønn],
                 };
             };
         default:
