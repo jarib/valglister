@@ -1,7 +1,7 @@
-const glob = require('glob');
 const csv = require('csv');
 const fs = require('fs');
 const path = require('path');
+const globby = require('globby');
 
 const es = require('elasticsearch');
 const ess = require('elasticsearch-streams');
@@ -17,55 +17,51 @@ const client = new es.Client({
     },
 });
 
-setupIndex((err) => {
-    if (err) {
-        throw err;
+const main = async () => {
+    await setupIndex();
+
+    const files = await globby(`${__dirname}/../data/*.csv`);
+
+    for (const file of files) {
+        console.log(file);
+
+        const ws = new ess.WritableBulk((cmds, callback) => {
+            client.bulk(
+                {
+                    index: 'valglister',
+                    type: 'kandidat',
+                    body: cmds,
+                },
+                callback
+            );
+        });
+
+        const toBulk = new ess.TransformToBulk((doc) => ({}));
+
+        const parser = csv.parse({
+            columns: true,
+            delimiter: ';',
+        });
+
+        await new Promise((resolve, reject) => {
+            try {
+                fs.createReadStream(file, 'utf-8')
+                    .pipe(parser)
+                    .pipe(transform(createTransform(file)))
+                    .pipe(toBulk)
+                    .pipe(ws)
+                    .on('error', reject)
+                    .on('finish', resolve);
+            } catch (error) {
+                reject(error);
+            }
+        });
     }
 
-    glob(`${__dirname}/../data/*.csv`, (err, files) => {
-        if (err) {
-            throw err;
-        }
+    client.close();
+};
 
-        function readNext() {
-            const ws = new ess.WritableBulk((cmds, callback) => {
-                client.bulk(
-                    {
-                        index: 'valglister',
-                        type: 'kandidat',
-                        body: cmds,
-                    },
-                    callback
-                );
-            });
-
-            const toBulk = new ess.TransformToBulk((doc) => ({}));
-
-            const parser = csv.parse({
-                columns: true,
-                delimiter: ';',
-            });
-
-            const file = files.shift();
-
-            console.log(file);
-
-            fs.createReadStream(file, 'utf-8')
-                .pipe(parser)
-                .pipe(transform(createTransform(file)))
-                .pipe(toBulk)
-                .pipe(ws)
-                .on('error', console.error)
-                .on('finish', finish);
-        }
-
-        function finish() {
-            files.length ? readNext() : client.close();
-        }
-
-        finish();
-    });
-});
+main().catch(console.error);
 
 const genders = {
     M: 'male',
@@ -74,111 +70,85 @@ const genders = {
     Kvinne: 'female',
 };
 
-function setupIndex(callback) {
-    client.indices
-        .delete({ index: 'valglister', ignore: [404] })
-        .then(() => {
-            client.indices.create(
-                {
-                    index: 'valglister',
-                    type: 'kandidat',
-                    body: {
-                        mappings: {
-                            kandidat: {
-                                // dynamic_templates: [{
-                                //     notanalyzed: {
-                                //         match: '*',
-                                //         match_mapping_type: 'string',
-                                //         mapping: {
-                                //             type: 'multi_field',
-                                //             fields: {
+async function setupIndex(callback) {
+    try {
+        await client.indices.delete({ index: 'valglister', ignore: [404] });
 
-                                //             }
-                                //         }
-                                //     }
-                                // }],
-                                properties: {
-                                    year: {
-                                        type: 'integer',
-                                    },
+        await client.indices.create(
+            {
+                index: 'valglister',
+                body: {
+                    mappings: {
+                        kandidat: {
+                            properties: {
+                                year: {
+                                    type: 'integer',
+                                },
 
-                                    election: {
-                                        type: 'string',
-                                        index: 'not_analyzed',
-                                    },
+                                election: {
+                                    type: 'keyword',
+                                },
 
-                                    countyId: {
-                                        type: 'string',
-                                        index: 'not_analyzed',
-                                    },
+                                countyId: {
+                                    type: 'keyword',
+                                },
 
-                                    countyName: {
-                                        type: 'string',
-                                        index: 'not_analyzed',
-                                    },
+                                countyName: {
+                                    type: 'keyword',
+                                },
 
-                                    municipalityId: {
-                                        type: 'string',
-                                        index: 'not_analyzed',
-                                    },
+                                municipalityId: {
+                                    type: 'keyword',
+                                },
 
-                                    municipalityName: {
-                                        type: 'string',
-                                        index: 'not_analyzed',
-                                    },
+                                municipalityName: {
+                                    type: 'keyword',
+                                },
 
-                                    cityDistrict: {
-                                        type: 'string',
-                                        index: 'not_analyzed',
-                                    },
+                                cityDistrict: {
+                                    type: 'keyword',
+                                },
 
-                                    partyId: {
-                                        type: 'string',
-                                        index: 'not_analyzed',
-                                    },
+                                partyId: {
+                                    type: 'keyword',
+                                },
 
-                                    partyName: {
-                                        type: 'string',
-                                        index: 'not_analyzed',
-                                    },
+                                partyName: {
+                                    type: 'keyword',
+                                },
 
-                                    candidateId: {
-                                        type: 'string',
-                                        index: 'not_analyzed',
-                                    },
+                                candidateId: {
+                                    type: 'keyword',
+                                },
 
-                                    name: {
-                                        type: 'multi_field',
-                                        fields: {
-                                            name: { type: 'string' },
-                                            raw: {
-                                                type: 'string',
-                                                index: 'not_analyzed',
-                                            },
+                                name: {
+                                    type: 'text',
+                                    fields: {
+                                        raw: {
+                                            type: 'keyword',
                                         },
                                     },
+                                },
 
-                                    yearBorn: {
-                                        type: 'integer',
-                                    },
+                                yearBorn: {
+                                    type: 'integer',
+                                },
 
-                                    dateBorn: {
-                                        type: 'date',
-                                    },
+                                dateBorn: {
+                                    type: 'date',
+                                },
 
-                                    gender: {
-                                        type: 'string',
-                                        index: 'not_analyzed',
-                                    },
+                                gender: {
+                                    type: 'keyword',
                                 },
                             },
                         },
                     },
                 },
-                callback
-            );
-        })
-        .catch(console.error);
+            },
+            callback
+        );
+    } catch (error) {}
 }
 
 function clean(str) {
@@ -297,7 +267,7 @@ function createTransform(file) {
                     gender: genders[row.kjønn],
                 };
             };
-        case 'eksport_kandidater2019_kommunestyrevalg':
+        case 'eksport_kandidater2019_komunestyrevalg':
             return (row) => {
                 return {
                     year: 2019,
