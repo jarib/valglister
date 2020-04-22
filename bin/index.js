@@ -174,6 +174,7 @@ function createTransform(file) {
             return (row) => ({
                 year: 2011,
                 election: 'kommunestyre',
+                countyId: row.KOMMNR.slice(0, 2),
                 municipalityId: row.KOMMNR,
                 municipalityName: row.KOMMUNE,
                 partyId: row.PARTIKODE,
@@ -200,7 +201,7 @@ function createTransform(file) {
             return (row) => ({
                 year: 2015,
                 election: 'bydelsutvalg',
-                countyId: '0300',
+                countyId: '03',
                 countyName: 'Oslo',
                 cityDistrict: row.Bydel,
                 partyId: row.Partikode,
@@ -226,6 +227,7 @@ function createTransform(file) {
             return (row) => ({
                 year: 2015,
                 election: 'kommunestyre',
+                countyId: row.Kommunenr.slice(0, 2),
                 countyName: row.Fylke,
                 municipalityId: row.Kommunenr,
                 municipalityName: row.Kommune,
@@ -274,6 +276,7 @@ function createTransform(file) {
                     election: 'kommunestyre',
                     municipalityId: row.kommunenr,
                     municipalityName: row.kommune,
+                    countyId: row.kommunenr.slice(0, 2),
                     countyName: row.fylke,
                     partyId: row.partikode,
                     partyName: row.partinavn,
