@@ -291,6 +291,8 @@ function createTransform(file) {
                     election: 'bydelsutvalg',
                     municipalityId: '0301',
                     municipalityName: 'Oslo',
+                    countyId: '03',
+                    countyName: 'Oslo',
                     cityDistrict: row.bydel,
                     partyId: row.partikode,
                     partyName: row.partinavn,
