@@ -1,6 +1,7 @@
 const csv = require('csv');
 const fs = require('fs');
 const path = require('path');
+const util = require('util');
 const globby = require('globby');
 
 const es = require('elasticsearch');
@@ -302,6 +303,51 @@ function createTransform(file) {
                     candidateId: row.kandidatnr,
                     name: clean(row.navn),
                     yearBorn: row.fødselsår,
+                    gender: genders[row.kjønn],
+                };
+            };
+        case 'valglisterogkandidaterstortingsvalget2021.csv':
+            const counties2021 = {
+                Østfold: '01',
+                Oslo: '03',
+                'Finnmark Finnmárku': '20',
+                Akershus: '02',
+                'Troms Romsa': '19',
+                'Nord-Trøndelag': '17',
+                Nordland: '18',
+                'Sør-Trøndelag': '16',
+                'Sogn og Fjordane': '14',
+                'Møre og Romsdal': '15',
+                'Vest-Agder': '10',
+                'Aust-Agder': '09',
+                Rogaland: '11',
+                Hordaland: '12',
+                Telemark: '08',
+                Vestfold: '07',
+                Buskerud: '06',
+                Oppland: '05',
+                Hedmark: '04',
+            };
+
+            return (row) => {
+                const dateBorn = moment(row.Fødselsdato, 'DD.MM.YYYY');
+                const countyId = counties2021[row.valgdistrikt];
+
+                if (!countyId) {
+                    throw new Error(`unknown county id: ${util.inspect(row)}`);
+                }
+
+                return {
+                    year: 2021,
+                    election: 'storting',
+                    countyId,
+                    countyName: row.valgdistrikt,
+                    partyId: row.partikode,
+                    partyName: row.partinavn,
+                    candidateId: row.kandidatnr,
+                    name: clean(row.navn),
+                    yearBorn: +dateBorn.format('YYYY'),
+                    dateBorn: dateBorn.format('YYYY-MM-DD'),
                     gender: genders[row.kjønn],
                 };
             };
