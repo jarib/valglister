@@ -18,58 +18,65 @@ const client = new es.Client({
     },
 });
 
-const main = async () => {
-    await setupIndex();
-
-    const files = await globby(`${__dirname}/../data/*.csv`);
-
-    for (const file of files) {
-        console.log(file);
-
-        const ws = new ess.WritableBulk((cmds, callback) => {
-            client.bulk(
-                {
-                    index: 'valglister',
-                    type: 'kandidat',
-                    body: cmds,
-                },
-                callback
-            );
-        });
-
-        const toBulk = new ess.TransformToBulk((doc) => ({}));
-
-        const parser = csv.parse({
-            columns: true,
-            delimiter: ';',
-        });
-
-        await new Promise((resolve, reject) => {
-            try {
-                fs.createReadStream(file, 'utf-8')
-                    .pipe(parser)
-                    .pipe(transform(createTransform(file)))
-                    .pipe(toBulk)
-                    .pipe(ws)
-                    .on('error', reject)
-                    .on('finish', resolve);
-            } catch (error) {
-                reject(error);
-            }
-        });
-    }
-
-    client.close();
-};
-
-main().catch(console.error);
-
 const genders = {
     M: 'male',
     K: 'female',
     Mann: 'male',
     Kvinne: 'female',
 };
+
+const delimiters = {
+    'valglisterogkandidaterstortingsvalget2021.csv': ',',
+};
+
+!(async () => {
+    try {
+        await setupIndex();
+
+        const files = await globby(`${__dirname}/../data/*.csv`);
+
+        for (const file of files) {
+            console.log(file);
+
+            const ws = new ess.WritableBulk((cmds, callback) => {
+                client.bulk(
+                    {
+                        index: 'valglister',
+                        type: 'kandidat',
+                        body: cmds,
+                    },
+                    callback
+                );
+            });
+
+            const toBulk = new ess.TransformToBulk((doc) => ({}));
+
+            const parser = csv.parse({
+                columns: true,
+                delimiter: delimiters[path.basename(file)] || ';',
+            });
+
+            await new Promise((resolve, reject) => {
+                try {
+                    fs.createReadStream(file, 'utf-8')
+                        .pipe(parser)
+                        .pipe(transform(createTransform(file)))
+                        .pipe(toBulk)
+                        .pipe(ws)
+                        .on('error', reject)
+                        .on('finish', resolve);
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        }
+
+        client.close();
+    } catch (error) {
+        console.error(error);
+        process.exit(1);
+    }
+})();
 
 async function setupIndex(callback) {
     try {
