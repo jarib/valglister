@@ -13,9 +13,6 @@ const moment = require('moment');
 const client = new es.Client({
     host: process.env.ELASTICSEARCH_URL || 'localhost:9200',
     debug: true,
-    createNodeAgent(connection, config) {
-        return new AgentKeepAlive(connection.makeAgentConfig(config));
-    },
 });
 
 const genders = {
@@ -313,7 +310,7 @@ function createTransform(file) {
                     gender: genders[row.kjønn],
                 };
             };
-        case 'valglisterogkandidaterstortingsvalget2021.csv':
+        case 'valglisterogkandidaterstortingsvalget2021':
             const counties2021 = {
                 Østfold: '01',
                 Oslo: '03',
@@ -337,7 +334,7 @@ function createTransform(file) {
             };
 
             return (row) => {
-                const dateBorn = moment(row.Fødselsdato, 'DD.MM.YYYY');
+                const dateBorn = moment(row.fødselsdato, 'DD.MM.YYYY');
                 const countyId = counties2021[row.valgdistrikt];
 
                 if (!countyId) {
