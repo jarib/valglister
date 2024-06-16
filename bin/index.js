@@ -362,7 +362,7 @@ function createTransform(file) {
         case 'fylkestingsvalget-2023':
         case 'bydelsutvalg-2023':
             function mapElection(election) {
-                if (election === 'Kommunestyrevalget 202') {
+                if (election === 'Kommunestyrevalget 2023') {
                     return 'kommunestyre';
                 }
 
