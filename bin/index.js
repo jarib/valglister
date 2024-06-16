@@ -24,6 +24,9 @@ const genders = {
 
 const delimiters = {
     'valglisterogkandidaterstortingsvalget2021.csv': ',',
+    'kommunestyrevalget-2023.csv': ',',
+    'fylkestingsvalget-2023.csv': ',',
+    'bydelsutvalg-2023.csv': ',',
 };
 
 !(async () => {
@@ -289,7 +292,7 @@ function createTransform(file) {
                     name: clean(row.navn),
                     yearBorn: row.fødselsår,
                     gender: genders[row.kjønn],
-                    cityDistrict: row.bosted,
+                    residence: row.bosted,
                 };
             };
         case 'eksport_kandidater2019_valg_bydelsutvalg_oslo':
@@ -355,6 +358,44 @@ function createTransform(file) {
                     gender: genders[row.kjønn],
                 };
             };
+        case 'kommunestyrevalget-2023':
+        case 'fylkestingsvalget-2023':
+        case 'bydelsutvalg-2023':
+            function mapElection(election) {
+                if (election === 'Kommunestyrevalget 202') {
+                    return 'kommunestyre';
+                }
+
+                if (election === 'Fylkestingsvalget 2023') {
+                    return 'fylkesting';
+                }
+
+                if (election === 'Valg til bydelsutvalg 2023') {
+                    return 'bydelsutvalg';
+                }
+
+                throw new Error(`unknown election: ${election}`);
+            }
+
+            return (row) => ({
+                year: 2023,
+                election: mapElection(row.Valg),
+                countyId: row.Fylkesnummer,
+                county: row.Fylke,
+                municipalityId: row.Kommunenummer,
+                municipality: row.Kommune,
+                cityDistrictId: row.Bydelsnummer,
+                cityDistrict: row.Bydel,
+                partyName: row.Partinavn,
+                candidateId: row.Kandidatnummer,
+                name: clean(row.Navn),
+                residence: row.Bosted,
+                yearBorn: +row.Fødselsår,
+                // correct e.g. 2061 to 1961
+                dateBorn: row.Fødselsdato.replace(/^\d{4}/, row.Fødselsår),
+                gender: genders[row.Kjønn],
+            });
+
         default:
             throw new Error(`don't know how to transform ${file}`);
     }
