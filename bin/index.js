@@ -3,17 +3,67 @@ const fs = require('fs');
 const path = require('path');
 const util = require('util');
 const globby = require('globby');
+const { Transform, Writable } = require('stream');
+const { pipeline } = require('stream/promises');
 
 const es = require('elasticsearch');
 const ess = require('elasticsearch-streams');
-const AgentKeepAlive = require('agentkeepalive');
-const transform = require('stream-transform');
+const { transform } = require('stream-transform');
 const moment = require('moment');
+const yargs = require('yargs/yargs');
+const { hideBin } = require('yargs/helpers');
 
-const client = new es.Client({
-    host: process.env.ELASTICSEARCH_URL || 'localhost:9200',
-    debug: true,
-});
+const CSV_COLUMNS = [
+    'year',
+    'election',
+    'countyId',
+    'countyName',
+    'county',
+    'municipalityId',
+    'municipalityName',
+    'municipality',
+    'cityDistrictId',
+    'cityDistrict',
+    'partyId',
+    'partyName',
+    'candidateId',
+    'name',
+    'residence',
+    'yearBorn',
+    'dateBorn',
+    'gender',
+];
+
+const argv = yargs(hideBin(process.argv))
+    .option('output', {
+        alias: 'o',
+        choices: ['es', 'csv', 'both'],
+        default: 'es',
+        describe: 'Select output target: Elasticsearch, CSV, or both.',
+    })
+    .option('csv-file', {
+        alias: 'f',
+        type: 'string',
+        default: path.resolve(__dirname, '..', 'valglister.csv'),
+        describe: 'Path to write aggregated CSV output when enabled.',
+    })
+    .help()
+    .strict()
+    .parse();
+
+const enableEs = argv.output === 'es' || argv.output === 'both';
+const enableCsv = argv.output === 'csv' || argv.output === 'both';
+
+const csvOutputPath = path.isAbsolute(argv.csvFile)
+    ? argv.csvFile
+    : path.resolve(process.cwd(), argv.csvFile);
+
+const client = enableEs
+    ? new es.Client({
+          host: process.env.ELASTICSEARCH_URL || 'localhost:9200',
+          debug: true,
+      })
+    : null;
 
 const genders = {
     M: 'male',
@@ -31,58 +81,111 @@ const delimiters = {
 
 !(async () => {
     try {
-        await setupIndex();
+        if (enableEs) {
+            await setupIndex(client);
+        }
 
         const files = await globby(`${__dirname}/../data/*.csv`);
+        let csvStringifier;
+        let csvOutputStream;
+        let csvFinished;
+
+        if (enableCsv) {
+            csvStringifier = csv.stringify({
+                header: true,
+                columns: CSV_COLUMNS,
+            });
+
+            csvOutputStream = fs.createWriteStream(csvOutputPath, 'utf-8');
+            csvFinished = new Promise((resolve, reject) => {
+                csvOutputStream.on('finish', resolve);
+                csvOutputStream.on('error', reject);
+                csvStringifier.on('error', reject);
+            });
+
+            csvStringifier.pipe(csvOutputStream);
+        }
 
         for (const file of files) {
             console.log(file);
-
-            const ws = new ess.WritableBulk((cmds, callback) => {
-                client.bulk(
-                    {
-                        index: 'valglister',
-                        type: 'kandidat',
-                        body: cmds,
-                    },
-                    callback
-                );
-            });
-
-            const toBulk = new ess.TransformToBulk((doc) => ({}));
 
             const parser = csv.parse({
                 columns: true,
                 delimiter: delimiters[path.basename(file)] || ';',
             });
 
-            await new Promise((resolve, reject) => {
-                try {
-                    fs.createReadStream(file, 'utf-8')
-                        .pipe(parser)
-                        .pipe(transform(createTransform(file)))
-                        .pipe(toBulk)
-                        .pipe(ws)
-                        .on('error', reject)
-                        .on('finish', resolve);
-                } catch (error) {
-                    reject(error);
-                }
+            const csvTap = new Transform({
+                objectMode: true,
+                transform(doc, enc, callback) {
+                    if (enableCsv) {
+                        if (!csvStringifier.write(doc)) {
+                            csvStringifier.once('drain', () => callback(null, doc));
+                            return;
+                        }
+                    }
+
+                    callback(null, doc);
+                },
             });
+
+            const steps = [
+                fs.createReadStream(file, 'utf-8'),
+                parser,
+                transform(createTransform(file)),
+                csvTap,
+            ];
+
+            if (enableEs) {
+                const toBulk = new ess.TransformToBulk(() => ({}));
+                const ws = new ess.WritableBulk((cmds, callback) => {
+                    client.bulk(
+                        {
+                            index: 'valglister',
+                            type: 'kandidat',
+                            body: cmds,
+                        },
+                        callback
+                    );
+                });
+
+                steps.push(toBulk, ws);
+            } else {
+                steps.push(
+                    new Writable({
+                        objectMode: true,
+                        write(_chunk, _encoding, callback) {
+                            callback();
+                        },
+                    })
+                );
+            }
+
+            await pipeline(...steps);
         }
 
-        client.close();
+        if (enableCsv) {
+            csvStringifier.end();
+            await csvFinished;
+        }
+
+        if (enableEs && client) {
+            client.close();
+        }
     } catch (error) {
         console.error(error);
         process.exit(1);
     }
 })();
 
-async function setupIndex(callback) {
-    try {
-        await client.indices.delete({ index: 'valglister', ignore: [404] });
+async function setupIndex(esClient) {
+    if (!esClient) {
+        return;
+    }
 
-        await client.indices.create(
+    try {
+        await esClient.indices.delete({ index: 'valglister', ignore: [404] });
+
+        await esClient.indices.create(
             {
                 index: 'valglister',
                 body: {
@@ -153,8 +256,7 @@ async function setupIndex(callback) {
                         },
                     },
                 },
-            },
-            callback
+            }
         );
     } catch (error) {}
 }
@@ -393,6 +495,24 @@ function createTransform(file) {
                 yearBorn: +row.Fødselsår,
                 // correct e.g. 2061 to 1961
                 dateBorn: row.Fødselsdato.replace(/^\d{4}/, row.Fødselsår),
+                gender: genders[row.Kjønn],
+            });
+        case 'lister_og_kandidater_stortingsvalget_2025':
+            // Valg;Valgdistrikt;Partinavn;Kandidatnr;Navn;Bosted;Stilling;Fødselsdato;Alder;Kjønn
+            return (row) => ({
+                year: 2025,
+                election: 'storting',
+                countyName: row.Valgdistrikt,
+                partyName: row.Partinavn,
+                candidateId: row.Kandidatnr,
+                name: clean(row.Navn),
+                residence: row.Bosted,
+                dateBorn: row.Fødselsdato
+                    ? moment(row.Fødselsdato, 'DD.MM.YYYY').format('YYYY-MM-DD')
+                    : undefined,
+                yearBorn: row.Fødselsdato
+                    ? +moment(row.Fødselsdato, 'DD.MM.YYYY').format('YYYY')
+                    : undefined,
                 gender: genders[row.Kjønn],
             });
 
