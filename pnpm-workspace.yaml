@@ -1,0 +1,4 @@
+minimumReleaseAgeExclude:
+  - lodash@4.17.23
+  - picomatch@2.3.2
+  - lodash@4.17.24
